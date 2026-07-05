@@ -1,0 +1,62 @@
+# ============ .NET / Visual Studio ============
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+*.userprefs
+
+# Rider
+.idea/
+*.iml
+
+# ============ Build artifacts ============
+[Dd]ebug/
+[Rr]elease/
+[Xx]64/
+[Xx]86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# ============ NuGet ============
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+# ============ Publish output ============
+publish/
+*.publishsettings
+PublishScripts/
+
+# ============ Логи лаунчера ============
+logs/
+*.log
+
+# ============ Файлы Minecraft (не пушим игру!) ============
+.minecraft/
+game_dir/
+versions/
+libraries/
+assets/
+
+# ============ Настройки пользователя ============
+settings.json
+launcher_debug.log
+launcher_crash.log
+
+# ============ OS ============
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,143 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MinecraftLauncher.ViewModels"
+        xmlns:views="using:MinecraftLauncher.Views"
+        xmlns:models="using:MinecraftLauncher.Core.Models"
+        x:Class="MinecraftLauncher.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="MC Launcher"
+        Width="1000" Height="650"
+        MinWidth="800" MinHeight="500"
+        WindowStartupLocation="CenterScreen"
+        Background="#1a1a2e">
+
+    <Design.DataContext>
+        <vm:MainViewModel/>
+    </Design.DataContext>
+
+    <Grid RowDefinitions="*, Auto">
+
+        <TabControl Grid.Row="0"
+                    SelectedIndex="{Binding SelectedTabIndex}"
+                    Background="Transparent"
+                    Margin="10">
+
+            <!-- ============ ГЛАВНАЯ ============ -->
+            <TabItem>
+                <TabItem.Header>
+                    <TextBlock Text="🏠 Главная" FontSize="14"/>
+                </TabItem.Header>
+
+                <Grid DataContext="{Binding Home}"
+                      x:DataType="vm:HomeViewModel"
+                      RowDefinitions="Auto, Auto, *, Auto"
+                      Margin="20">
+
+                    <TextBlock Grid.Row="0"
+                               Text="⛏ Minecraft Launcher"
+                               FontSize="32"
+                               FontWeight="Bold"
+                               Foreground="#e94560"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,20"/>
+
+                    <Border Grid.Row="1"
+                            Background="#16213e"
+                            CornerRadius="12"
+                            Padding="20"
+                            Margin="0,0,0,16">
+                        <Grid ColumnDefinitions="*, 16, *">
+
+                            <StackPanel Grid.Column="0" Spacing="6">
+                                <TextBlock Text="Имя игрока"
+                                           Foreground="#8899aa"
+                                           FontSize="12"/>
+                                <TextBox Text="{Binding Username}"
+                                         Watermark="Никнейм..."
+                                         FontSize="14"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" Spacing="6">
+                                <TextBlock Text="Версия"
+                                           Foreground="#8899aa"
+                                           FontSize="12"/>
+                                <ComboBox ItemsSource="{Binding Versions}"
+                                          SelectedItem="{Binding SelectedVersion}"
+                                          HorizontalAlignment="Stretch"
+                                          FontSize="14">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="models:MinecraftVersion">
+                                            <TextBlock Text="{Binding Id}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="2"
+                            Background="#0f0f23"
+                            CornerRadius="8"
+                            Padding="12">
+                        <ScrollViewer>
+                            <TextBlock Text="{Binding GameLog}"
+                                       Foreground="#44ff44"
+                                       FontFamily="Consolas, monospace"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"/>
+                        </ScrollViewer>
+                    </Border>
+
+                    <Button Grid.Row="3"
+                            Content="▶  ИГРАТЬ"
+                            Command="{Binding LaunchGameCommand}"
+                            IsEnabled="{Binding !IsLaunching}"
+                            HorizontalAlignment="Center"
+                            FontSize="20"
+                            FontWeight="Bold"
+                            Foreground="White"
+                            Background="#e94560"
+                            Padding="60,14"
+                            CornerRadius="8"
+                            Margin="0,16,0,0"/>
+                </Grid>
+            </TabItem>
+
+            <!-- ============ НАСТРОЙКИ ============ -->
+            <TabItem>
+                <TabItem.Header>
+                    <TextBlock Text="⚙ Настройки" FontSize="14"/>
+                </TabItem.Header>
+
+                <views:SettingsView DataContext="{Binding Settings}"/>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="1"
+                Background="#0f3460"
+                Padding="16,10"
+                DataContext="{Binding Home}"
+                x:DataType="vm:HomeViewModel">
+            <Grid ColumnDefinitions="*, Auto, 20, Auto">
+                <TextBlock Grid.Column="0"
+                           Text="{Binding StatusText}"
+                           Foreground="#cccccc"
+                           VerticalAlignment="Center"
+                           FontSize="12"/>
+                <ProgressBar Grid.Column="1"
+                             Value="{Binding ProgressValue}"
+                             IsVisible="{Binding ShowProgress}"
+                             Width="200"
+                             Height="8"
+                             VerticalAlignment="Center"/>
+                <Button Grid.Column="3"
+                        Content="🔄 Обновить"
+                        Command="{Binding LoadVersionsCommand}"
+                        Padding="12,4"
+                        FontSize="11"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
