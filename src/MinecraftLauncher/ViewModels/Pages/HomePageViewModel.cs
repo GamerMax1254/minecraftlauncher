@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -11,10 +12,13 @@ using MinecraftLauncher.Core.Launcher;
 using MinecraftLauncher.Core.Logging;
 using MinecraftLauncher.Core.Models;
 
-namespace MinecraftLauncher.ViewModels;
+namespace MinecraftLauncher.ViewModels.Pages;
 
-public partial class HomeViewModel : ObservableObject
+public partial class HomePageViewModel : PageViewModelBase
 {
+    public override string Title => "Главная";
+    public override string Icon => "🏠";
+
     private readonly HttpClient _http = new();
     private readonly SettingsManager _settings;
     private VersionManager _versionManager;
@@ -23,15 +27,16 @@ public partial class HomeViewModel : ObservableObject
 
     [ObservableProperty] private string _username = Environment.UserName;
     [ObservableProperty] private string _statusText = "Готов к запуску";
-    [ObservableProperty] private double _progressValue;
     [ObservableProperty] private bool _isLaunching;
     [ObservableProperty] private bool _showProgress;
+    [ObservableProperty] private double _progressValue;
+    [ObservableProperty] private string _progressDetail = "";
     [ObservableProperty] private MinecraftVersion? _selectedVersion;
-    [ObservableProperty] private string _gameLog = "";
+    [ObservableProperty] private string _lastPlayedText = "Никогда";
 
-    public ObservableCollection<MinecraftVersion> Versions { get; } = new();
+    public ObservableCollection<MinecraftVersion> QuickVersions { get; } = new();
 
-    public HomeViewModel(SettingsManager settings)
+    public HomePageViewModel(SettingsManager settings)
     {
         _settings = settings;
         var gameDir = _settings.Settings.GameDirectory;
@@ -39,16 +44,16 @@ public partial class HomeViewModel : ObservableObject
         _versionInstaller = new VersionInstaller(_http, gameDir);
         _gameLauncher = new GameLauncher(gameDir);
         SubscribeLauncher();
+
+        Username = string.IsNullOrEmpty(_settings.Settings.LastUsername)
+            ? Environment.UserName
+            : _settings.Settings.LastUsername;
     }
 
-    private void SubscribeLauncher()
+    public override void OnNavigatedTo()
     {
-        _gameLauncher.OnLog += line => GameLog += line + "\n";
-        _gameLauncher.OnGameExited += code =>
-        {
-            StatusText = $"Игра завершена (код: {code})";
-            IsLaunching = false;
-        };
+        base.OnNavigatedTo();
+        _ = LoadQuickVersionsAsync();
     }
 
     public void ReloadForGameDir()
@@ -58,35 +63,44 @@ public partial class HomeViewModel : ObservableObject
         _versionInstaller = new VersionInstaller(_http, gameDir);
         _gameLauncher = new GameLauncher(gameDir);
         SubscribeLauncher();
-        Logger.Info($"HomeViewModel reloaded for game dir: {gameDir}");
     }
 
-    [RelayCommand]
-    public async Task LoadVersionsAsync()
+    public void SetVersionAndLaunch(MinecraftVersion version)
     {
-        StatusText = "Загрузка списка версий...";
-        Logger.Info("Loading versions list");
+        // Добавляем в список если её там нет
+        if (!QuickVersions.Any(v => v.Id == version.Id))
+            QuickVersions.Insert(0, version);
+        SelectedVersion = version;
+    }
+
+    private void SubscribeLauncher()
+    {
+        _gameLauncher.OnGameExited += code =>
+        {
+            StatusText = $"Игра завершена (код {code})";
+            IsLaunching = false;
+            ShowProgress = false;
+        };
+    }
+
+    private async Task LoadQuickVersionsAsync()
+    {
+        if (QuickVersions.Count > 0) return; // уже загружено
         try
         {
-            var includeSnapshots = _settings.Settings.ShowSnapshots;
-            var versions = await _versionManager.GetAvailableVersionsAsync(includeSnapshots);
-            Versions.Clear();
-            foreach (var v in versions)
-                Versions.Add(v);
-
-            SelectedVersion = Versions.FirstOrDefault();
-            StatusText = $"Загружено {Versions.Count} версий";
-            Logger.Info($"Loaded {Versions.Count} versions");
+            var versions = await _versionManager.GetAvailableVersionsAsync(false);
+            foreach (var v in versions.Take(15))
+                QuickVersions.Add(v);
+            SelectedVersion ??= QuickVersions.FirstOrDefault();
         }
         catch (Exception ex)
         {
-            StatusText = $"Ошибка: {ex.Message}";
-            Logger.Error("Failed to load versions", ex);
+            Logger.Error("Failed to load quick versions", ex);
         }
     }
 
     [RelayCommand]
-    public async Task LaunchGameAsync()
+    private async Task LaunchAsync()
     {
         if (SelectedVersion is null)
         {
@@ -101,32 +115,35 @@ public partial class HomeViewModel : ObservableObject
 
         IsLaunching = true;
         ShowProgress = true;
-        GameLog = "";
         ProgressValue = 0;
 
         try
         {
-            Logger.Info($"Preparing launch of {SelectedVersion.Id}");
-
-            // 1. Ищем Java
-            var javaPath = !string.IsNullOrEmpty(_settings.Settings.JavaPath)
-                ? _settings.Settings.JavaPath
-                : await JavaFinder.FindJavaAsync();
-
+            // Java
+            string? javaPath = null;
+            var selectedId = _settings.Settings.SelectedJavaId;
+            if (!string.IsNullOrEmpty(selectedId))
+            {
+                var selected = _settings.Settings.JavaInstallations
+                    .FirstOrDefault(j => j.Id == selectedId);
+                if (selected != null && File.Exists(selected.Path))
+                    javaPath = selected.Path;
+            }
+            javaPath ??= await JavaFinder.FindJavaAsync();
             if (string.IsNullOrEmpty(javaPath))
-                throw new Exception("Java не найдена! Укажите путь во вкладке «Настройки».");
+                throw new Exception("Java не найдена. Добавьте её в Настройках.");
 
-            // 2. Скачиваем/проверяем файлы версии
-            StatusText = $"Установка {SelectedVersion.Id}...";
+            // Установка
             var progress = new Progress<(string Stage, int Done, int Total)>(p =>
             {
-                StatusText = $"{p.Stage} ({p.Done}/{p.Total})";
+                StatusText = p.Stage;
                 ProgressValue = p.Total > 0 ? (double)p.Done / p.Total * 100 : 0;
+                ProgressDetail = p.Total > 0 ? $"{p.Done} / {p.Total} файлов" : "";
             });
 
             await _versionInstaller.InstallAsync(SelectedVersion, progress);
 
-            // 3. Запускаем
+            // Запуск
             StatusText = "Запуск игры...";
             ProgressValue = 100;
 
@@ -146,15 +163,19 @@ public partial class HomeViewModel : ObservableObject
 
             await _gameLauncher.LaunchAsync(launchSettings);
 
-            StatusText = "Игра запущена!";
+            // Сохраняем ник
+            _settings.Settings.LastUsername = Username;
+            _settings.Save();
+
+            LastPlayedText = "Только что";
+            StatusText = "Игра запущена ✓";
         }
         catch (Exception ex)
         {
             StatusText = $"Ошибка: {ex.Message}";
             Logger.Error("Launch failed", ex);
             IsLaunching = false;
+            ShowProgress = false;
         }
-
-        ShowProgress = false;
     }
 }

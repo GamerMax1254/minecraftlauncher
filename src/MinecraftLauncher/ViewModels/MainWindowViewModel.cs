@@ -1,6 +1,13 @@
 ﻿namespace MinecraftLauncher.ViewModels;
 
-public partial class MainWindowViewModel : ViewModelBase
+public abstract class PageViewModelBase : ViewModelBase
 {
-    public string Greeting { get; } = "Welcome to Avalonia!";
+    public abstract string Title { get; }
+    public abstract string Icon { get; }
+
+    /// <summary>Вызывается когда пользователь переходит на эту страницу</summary>
+    public virtual void OnNavigatedTo() { }
+
+    /// <summary>Вызывается когда пользователь уходит со страницы</summary>
+    public virtual void OnNavigatedFrom() { }
 }

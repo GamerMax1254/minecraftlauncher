@@ -1,0 +1,92 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MinecraftLauncher.ViewModels.Pages"
+             x:Class="MinecraftLauncher.Views.Pages.AboutPage"
+             x:DataType="vm:AboutPageViewModel">
+
+    <ScrollViewer>
+        <StackPanel Margin="40,30" Spacing="24" MaxWidth="800">
+
+            <TextBlock Text="О программе" Classes="h1"/>
+
+            <!-- Главная карточка -->
+            <Border Classes="card">
+                <StackPanel Spacing="16" HorizontalAlignment="Center">
+                    <Border Background="{StaticResource AccentPrimaryBrush}"
+                            Width="64" Height="64"
+                            CornerRadius="16">
+                        <TextBlock Text="⛏"
+                                   FontSize="36"
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="Minecraft Launcher"
+                               FontSize="24"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                        <Border Classes="badge">
+                            <TextBlock Text="{Binding Version, StringFormat='v{0}'}"/>
+                        </Border>
+                        <TextBlock Text="{Binding BuildDate}"
+                                   Classes="caption"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Text="Кастомный лаунчер Minecraft, написанный на C# и Avalonia UI"
+                               Classes="body"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               MaxWidth="500"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Технологии -->
+            <Border Classes="card">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="Технологии" Classes="h2"/>
+                    <ItemsControl>
+                        <ItemsControl.Items>
+                            <x:String>⚡ .NET 8 + C#</x:String>
+                            <x:String>🎨 Avalonia UI 12</x:String>
+                            <x:String>🧩 CommunityToolkit.Mvvm</x:String>
+                            <x:String>🌐 Mojang API</x:String>
+                        </ItemsControl.Items>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}"
+                                           Classes="body"
+                                           Margin="0,4"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Ссылки -->
+            <Border Classes="card">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="Ссылки" Classes="h2"/>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding GitHubUrl, StringFormat='GitHub: {0}'}"
+                                   Classes="body"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Author, StringFormat='Автор: {0}'}"
+                                   Classes="body"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Лицензия -->
+            <Border Classes="card">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Лицензия" Classes="h2"/>
+                    <TextBlock Text="MIT License. Проект не является официальным продуктом Mojang/Microsoft."
+                               Classes="body"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

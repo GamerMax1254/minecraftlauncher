@@ -1,0 +1,127 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MinecraftLauncher.ViewModels.Pages"
+             xmlns:models="using:MinecraftLauncher.Core.Models"
+             x:Class="MinecraftLauncher.Views.Pages.HomePage"
+             x:DataType="vm:HomePageViewModel">
+
+    <Grid RowDefinitions="Auto, *, Auto">
+
+        <!-- ============ ЗАГОЛОВОК ============ -->
+        <Border Grid.Row="0"
+                Padding="40,30,40,20"
+                Background="{StaticResource BgBaseBrush}">
+            <Grid ColumnDefinitions="*, Auto">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Добро пожаловать!" Classes="h1"/>
+                    <TextBlock Text="Выбери версию и жми играть" 
+                               Classes="body"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="ПОСЛЕДНЯЯ ИГРА" Classes="label" HorizontalAlignment="Right"/>
+                    <TextBlock Text="{Binding LastPlayedText}"
+                               FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               HorizontalAlignment="Right"
+                               Margin="0,2,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============ ОСНОВНОЙ БЛОК ============ -->
+        <ScrollViewer Grid.Row="1" Padding="40,10">
+            <StackPanel Spacing="20" MaxWidth="900" HorizontalAlignment="Stretch">
+
+                <!-- Быстрый запуск -->
+                <Border Classes="card">
+                    <StackPanel Spacing="20">
+                        <Grid ColumnDefinitions="*, 20, *">
+                            <StackPanel Grid.Column="0" Spacing="8">
+                                <TextBlock Text="ИГРОК" Classes="label"/>
+                                <TextBox Text="{Binding Username}"
+                                         Watermark="Введите ник..."/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="8">
+                                <TextBlock Text="ВЕРСИЯ" Classes="label"/>
+                                <ComboBox ItemsSource="{Binding QuickVersions}"
+                                          SelectedItem="{Binding SelectedVersion}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="models:MinecraftVersion">
+                                            <TextBlock Text="{Binding Id}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+
+                        <Button Content="▶  ИГРАТЬ"
+                                Classes="primary"
+                                Command="{Binding LaunchCommand}"
+                                IsEnabled="{Binding !IsLaunching}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                FontSize="16"
+                                Padding="0,14"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Прогресс загрузки -->
+                <Border Classes="card" 
+                        IsVisible="{Binding ShowProgress}">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding StatusText}"
+                                       FontSize="13"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding ProgressValue, StringFormat={}{0:F0}%}"
+                                       FontSize="13"
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource AccentPrimaryBrush}"/>
+                        </Grid>
+                        <ProgressBar Value="{Binding ProgressValue}" Maximum="100"/>
+                        <TextBlock Text="{Binding ProgressDetail}"
+                                   Classes="caption"
+                                   IsVisible="{Binding ProgressDetail.Length}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Плитки -->
+                <Grid ColumnDefinitions="*, 16, *">
+                    <Border Grid.Column="0" Classes="card">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="📊" FontSize="24"/>
+                            <TextBlock Text="Статистика" Classes="h3"/>
+                            <TextBlock Text="Отслеживай время игры и достижения (скоро)"
+                                       Classes="body"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Classes="card">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="🧩" FontSize="24"/>
+                            <TextBlock Text="Моды" Classes="h3"/>
+                            <TextBlock Text="Устанавливай моды через Fabric/Forge (скоро)"
+                                       Classes="body"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ============ СТАТУС-БАР ============ -->
+        <Border Grid.Row="2"
+                Background="{StaticResource BgSidebarBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="20,10">
+            <TextBlock Text="{Binding StatusText}"
+                       Classes="caption"/>
+        </Border>
+    </Grid>
+</UserControl>

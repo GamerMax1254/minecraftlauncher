@@ -10,6 +10,7 @@
   <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
+    <Folder Include="Styles\" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,5 +28,20 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MinecraftLauncher.Core\MinecraftLauncher.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Views\MainWindow.axaml.cs">
+      <DependentUpon>MainWindow.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Views\Pages\HomePage.axaml.cs">
+      <DependentUpon>HomePage.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Views\Pages\AboutPage.axaml.cs">
+      <DependentUpon>AboutPage.axaml</DependentUpon>
+    </Compile>
+    <Compile Update="Views\Pages\VersionsPage.axaml.cs">
+      <DependentUpon>VersionsPage.axaml</DependentUpon>
+    </Compile>
   </ItemGroup>
 </Project>

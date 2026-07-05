@@ -1,20 +1,20 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using MinecraftLauncher.ViewModels;
+using MinecraftLauncher.ViewModels.Pages;
 
-namespace MinecraftLauncher.Views;
+namespace MinecraftLauncher.Views.Pages;
 
-public partial class SettingsView : UserControl
+public partial class SettingsPage : UserControl
 {
-    public SettingsView()
+    public SettingsPage()
     {
         InitializeComponent();
     }
 
     private async void OnBrowseGameDirClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not SettingsViewModel vm) return;
+        if (DataContext is not SettingsPageViewModel vm) return;
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel == null) return;
 
@@ -31,7 +31,7 @@ public partial class SettingsView : UserControl
 
     private async void OnBrowseJavaClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not SettingsViewModel vm) return;
+        if (DataContext is not SettingsPageViewModel vm) return;
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel == null) return;
 
@@ -39,10 +39,17 @@ public partial class SettingsView : UserControl
             new FilePickerOpenOptions
             {
                 Title = "Выберите java.exe",
-                AllowMultiple = false
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType("Java")
+                    {
+                        Patterns = new[] { "java.exe", "java" }
+                    }
+                }
             });
 
         if (file.Count > 0)
-            vm.JavaPath = file[0].Path.LocalPath;
+            vm.CustomJavaPath = file[0].Path.LocalPath;
     }
 }

@@ -1,0 +1,62 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MinecraftLauncher.ViewModels.Pages"
+             x:Class="MinecraftLauncher.Views.Pages.LogsPage"
+             x:DataType="vm:LogsPageViewModel">
+
+    <Grid RowDefinitions="Auto, Auto, *, Auto">
+
+        <Border Grid.Row="0" Padding="40,30,40,20">
+            <Grid ColumnDefinitions="*, Auto, 6, Auto, 6, Auto">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Логи" Classes="h1"/>
+                    <TextBlock Text="История событий лаунчера и игры"
+                               Classes="body" Margin="0,4,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="🔄 Обновить"
+                        Command="{Binding RefreshLogsListCommand}"
+                        VerticalAlignment="Center"/>
+                <Button Grid.Column="3"
+                        Content="📂 Открыть папку"
+                        Command="{Binding OpenLogsFolderCommand}"
+                        VerticalAlignment="Center"/>
+                <Button Grid.Column="5"
+                        Content="🗑 Очистить"
+                        Classes="danger"
+                        Command="{Binding ClearAllLogsCommand}"
+                        VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Padding="40,0,40,16">
+            <StackPanel Spacing="8">
+                <TextBlock Text="ЛОГ ФАЙЛ" Classes="label"/>
+                <ComboBox ItemsSource="{Binding LogFiles}"
+                          SelectedItem="{Binding SelectedLogFile}"
+                          HorizontalAlignment="Stretch"
+                          PlaceholderText="Нет доступных логов"/>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="2" 
+                Classes="card"
+                Margin="40,0,40,20">
+            <ScrollViewer>
+                <TextBlock Text="{Binding LogContent}"
+                           FontFamily="Consolas, monospace"
+                           FontSize="11"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           TextWrapping="Wrap"/>
+            </ScrollViewer>
+        </Border>
+
+        <Border Grid.Row="3"
+                Background="{StaticResource BgSidebarBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="40,10">
+            <TextBlock Text="{Binding StatusText}" Classes="caption"/>
+        </Border>
+    </Grid>
+</UserControl>

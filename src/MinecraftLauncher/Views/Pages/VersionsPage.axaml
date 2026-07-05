@@ -1,0 +1,133 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MinecraftLauncher.ViewModels.Pages"
+             x:Class="MinecraftLauncher.Views.Pages.VersionsPage"
+             x:DataType="vm:VersionsPageViewModel">
+
+    <Grid RowDefinitions="Auto, Auto, *, Auto">
+
+        <!-- Заголовок -->
+        <Border Grid.Row="0" Padding="40,30,40,20">
+            <Grid ColumnDefinitions="*, Auto">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Версии Minecraft" Classes="h1"/>
+                    <TextBlock Text="Все доступные версии игры"
+                               Classes="body" Margin="0,4,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="🔄 Обновить"
+                        Command="{Binding LoadVersionsCommand}"
+                        IsEnabled="{Binding !IsLoading}"
+                        VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- Фильтры -->
+        <Border Grid.Row="1" 
+                Padding="40,0,40,16"
+                Background="{StaticResource BgBaseBrush}">
+            <StackPanel Spacing="12">
+                <TextBox Text="{Binding SearchText}"
+                         Watermark="🔍 Поиск версии (1.20, 1.21...)"/>
+
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <CheckBox IsChecked="{Binding ShowRelease}" Content="Release"/>
+                    <CheckBox IsChecked="{Binding ShowSnapshot}" Content="Snapshot"/>
+                    <CheckBox IsChecked="{Binding ShowOldBeta}" Content="Beta"/>
+                    <CheckBox IsChecked="{Binding ShowOldAlpha}" Content="Alpha"/>
+                    <Rectangle Width="1" Fill="{StaticResource BorderSubtleBrush}"/>
+                    <CheckBox IsChecked="{Binding ShowInstalledOnly}"
+                              Content="Только установленные"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Список версий -->
+        <ScrollViewer Grid.Row="2" Padding="40,0,40,20">
+            <ItemsControl ItemsSource="{Binding Versions}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vm:VersionListItem">
+                        <Border Classes="card" Margin="0,0,0,10" Padding="16">
+                            <Grid ColumnDefinitions="Auto, 16, *, Auto">
+
+                                <!-- Иконка типа -->
+                                <Border Grid.Column="0"
+                                        Background="{Binding TypeColor}"
+                                        Width="48" Height="48"
+                                        CornerRadius="8"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="⛏"
+                                               FontSize="22"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+
+                                <!-- Инфо -->
+                                <StackPanel Grid.Column="2" Spacing="4"
+                                            VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Version.Id}"
+                                                   FontSize="15"
+                                                   FontWeight="SemiBold"/>
+                                        <Border Classes="badge"
+                                                Background="{Binding TypeColor}">
+                                            <TextBlock Text="{Binding TypeBadge}"/>
+                                        </Border>
+                                        <Border Classes="badge"
+                                                Background="{StaticResource AccentSecondaryBrush}"
+                                                IsVisible="{Binding IsInstalled}">
+                                            <TextBlock Text="УСТАНОВЛЕНА"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding ReleaseDate}"
+                                               Classes="caption"/>
+
+                                    <!-- Прогресс установки -->
+                                    <StackPanel Spacing="4"
+                                                IsVisible="{Binding IsInstalling}">
+                                        <ProgressBar Value="{Binding Progress}" Maximum="100"/>
+                                        <TextBlock Text="{Binding ProgressText}"
+                                                   Classes="caption"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Кнопки -->
+                                <StackPanel Grid.Column="3"
+                                            Orientation="Horizontal"
+                                            Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <Button Content="⬇ Установить"
+                                            Command="{Binding $parent[ItemsControl].((vm:VersionsPageViewModel)DataContext).InstallCommand}"
+                                            CommandParameter="{Binding}"
+                                            IsVisible="{Binding !IsInstalled}"
+                                            IsEnabled="{Binding !IsInstalling}"/>
+                                    <Button Content="▶ Играть"
+                                            Classes="primary"
+                                            Command="{Binding $parent[ItemsControl].((vm:VersionsPageViewModel)DataContext).LaunchCommand}"
+                                            CommandParameter="{Binding}"
+                                            IsVisible="{Binding IsInstalled}"/>
+                                    <Button Content="🗑"
+                                            Classes="ghost"
+                                            Command="{Binding $parent[ItemsControl].((vm:VersionsPageViewModel)DataContext).DeleteVersionCommand}"
+                                            CommandParameter="{Binding}"
+                                            IsVisible="{Binding IsInstalled}"
+                                            ToolTip.Tip="Удалить"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Статус -->
+        <Border Grid.Row="3"
+                Background="{StaticResource BgSidebarBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="40,10">
+            <TextBlock Text="{Binding StatusText}" Classes="caption"/>
+        </Border>
+    </Grid>
+</UserControl>

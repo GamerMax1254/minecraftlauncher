@@ -1,0 +1,235 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MinecraftLauncher.ViewModels.Pages"
+             xmlns:models="using:MinecraftLauncher.Core.Models"
+             x:Class="MinecraftLauncher.Views.Pages.SettingsPage"
+             x:DataType="vm:SettingsPageViewModel">
+
+    <Grid RowDefinitions="Auto, *, Auto">
+
+        <!-- Заголовок -->
+        <Border Grid.Row="0" Padding="40,30,40,20">
+            <StackPanel>
+                <TextBlock Text="Настройки" Classes="h1"/>
+                <TextBlock Text="Конфигурация лаунчера и запуска игры"
+                           Classes="body" Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Контент -->
+        <ScrollViewer Grid.Row="1" Padding="40,0,40,40">
+            <StackPanel Spacing="16" MaxWidth="900" Margin="0,0,0,60">
+
+                <!-- ===== ПАПКА ИГРЫ ===== -->
+                <Border Classes="card">
+                    <StackPanel Spacing="14">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="Папка игры" Classes="h2"/>
+                                <TextBlock Text="Здесь хранятся версии, моды, миры и настройки"
+                                           Classes="body"/>
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Content="📂 Открыть"
+                                    Command="{Binding OpenGameFolderCommand}"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="*, 10, Auto">
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding GameDirectory}"
+                                     Watermark="Путь к .minecraft"/>
+                            <Button Grid.Column="2"
+                                    Content="Обзор..."
+                                    Click="OnBrowseGameDirClick"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== JAVA ===== -->
+                <Border Classes="card">
+                    <StackPanel Spacing="14">
+                        <Grid ColumnDefinitions="*, Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="Java Runtime" Classes="h2"/>
+                                <TextBlock Text="Разные версии игры требуют разную Java (1.21+ → JDK 21)"
+                                           Classes="body"/>
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Content="🔍 Автопоиск"
+                                    Classes="primary"
+                                    Command="{Binding DetectJavaCommand}"
+                                    IsEnabled="{Binding !IsDetectingJava}"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- Активная Java -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="АКТИВНАЯ" Classes="label"/>
+                            <ComboBox ItemsSource="{Binding JavaInstallations}"
+                                      SelectedItem="{Binding SelectedJava}"
+                                      HorizontalAlignment="Stretch"
+                                      PlaceholderText="Нет установленных Java">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="models:JavaInstallation">
+                                        <Grid ColumnDefinitions="Auto, 10, *, Auto">
+                                            <Border Grid.Column="0" Classes="badge">
+                                                <TextBlock Text="{Binding MajorVersion, StringFormat='JDK {0}'}"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding Name}"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="3"
+                                                       Text="{Binding Version}"
+                                                       Classes="caption"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <!-- Список сохранённых -->
+                        <StackPanel Spacing="8"
+                                    IsVisible="{Binding JavaInstallations.Count}">
+                            <TextBlock Text="СОХРАНЁННЫЕ" Classes="label"/>
+                            <ItemsControl ItemsSource="{Binding JavaInstallations}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="models:JavaInstallation">
+                                        <Border Background="{StaticResource BgInputBrush}"
+                                                CornerRadius="6"
+                                                Padding="12,10"
+                                                Margin="0,0,0,6">
+                                            <Grid ColumnDefinitions="Auto, 12, *, Auto">
+                                                <Border Grid.Column="0" Classes="badge"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding MajorVersion, StringFormat='JDK {0}'}"/>
+                                                </Border>
+                                                <StackPanel Grid.Column="2" Spacing="2">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                                               FontSize="13"/>
+                                                    <TextBlock Text="{Binding Path}"
+                                                               Classes="caption"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="3"
+                                                        Content="✕"
+                                                        Classes="ghost"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding $parent[ItemsControl].((vm:SettingsPageViewModel)DataContext).RemoveJavaCommand}"
+                                                        CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- Добавить свою -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="ДОБАВИТЬ СВОЮ" Classes="label"/>
+                            <Grid ColumnDefinitions="*, 10, 2*, 10, Auto, 6, Auto">
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding CustomJavaName}"
+                                         Watermark="Название (опц.)"/>
+                                <TextBox Grid.Column="2"
+                                         Text="{Binding CustomJavaPath}"
+                                         Watermark="Путь к java.exe"/>
+                                <Button Grid.Column="4"
+                                        Content="Обзор"
+                                        Click="OnBrowseJavaClick"/>
+                                <Button Grid.Column="6"
+                                        Content="+ Добавить"
+                                        Classes="primary"
+                                        Command="{Binding AddCustomJavaCommand}"/>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== ПАМЯТЬ ===== -->
+                <Border Classes="card">
+                    <StackPanel Spacing="18">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Оперативная память" Classes="h2"/>
+                            <TextBlock Text="Больше памяти = плавнее модпаки. Не выделяй больше 60% от системной."
+                                       Classes="body"/>
+                        </StackPanel>
+
+                        <!-- Min -->
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBlock Grid.Column="0" Text="МИНИМУМ (Xms)" Classes="label"/>
+                                <Border Grid.Column="1" Classes="badge"
+                                        Background="{StaticResource BgInputBrush}">
+                                    <TextBlock Text="{Binding DefaultMinRamGb, StringFormat='{}{0:0.0} GB'}"
+                                               Foreground="{StaticResource AccentPrimaryBrush}"/>
+                                </Border>
+                            </Grid>
+                            <Slider Value="{Binding DefaultMinRamGb}"
+                                    Minimum="0.5"
+                                    Maximum="{Binding DefaultMaxRamGb}"
+                                    TickFrequency="0.5"
+                                    IsSnapToTickEnabled="True"/>
+                        </StackPanel>
+
+                        <!-- Max -->
+                        <StackPanel Spacing="8">
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBlock Grid.Column="0" Text="МАКСИМУМ (Xmx)" Classes="label"/>
+                                <Border Grid.Column="1" Classes="badge"
+                                        Background="{StaticResource BgInputBrush}">
+                                    <TextBlock Text="{Binding DefaultMaxRamGb, StringFormat='{}{0:0.0} GB'}"
+                                               Foreground="{StaticResource AccentPrimaryBrush}"/>
+                                </Border>
+                            </Grid>
+                            <Slider Value="{Binding DefaultMaxRamGb}"
+                                    Minimum="1"
+                                    Maximum="{Binding TotalSystemRamGb}"
+                                    TickFrequency="0.5"
+                                    IsSnapToTickEnabled="True"/>
+                            <TextBlock Text="{Binding TotalSystemRamGb, StringFormat='Доступно в системе: {0:0.0} GB'}"
+                                       Classes="caption"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== ОБЩИЕ ===== -->
+                <Border Classes="card">
+                    <StackPanel Spacing="14">
+                        <TextBlock Text="Общие" Classes="h2"/>
+                        <CheckBox IsChecked="{Binding ShowSnapshots}"
+                                  Content="Показывать snapshot-версии в списке"/>
+                        <CheckBox IsChecked="{Binding CloseLauncherOnGameStart}"
+                                  Content="Закрывать лаунчер при запуске игры"/>
+                        <CheckBox IsChecked="{Binding ShowLogsPage}"
+                                  Content="Показывать вкладку «Логи» в меню"/>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Нижняя панель -->
+        <Border Grid.Row="2"
+                Background="{StaticResource BgSidebarBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="40,14">
+            <Grid ColumnDefinitions="*, Auto, 10, Auto">
+                <TextBlock Grid.Column="0"
+                           Text="{Binding StatusText}"
+                           Foreground="{StaticResource AccentSecondaryBrush}"
+                           VerticalAlignment="Center"
+                           FontSize="12"/>
+                <Button Grid.Column="1"
+                        Content="↺ Сбросить"
+                        Command="{Binding ResetToDefaultCommand}"/>
+                <Button Grid.Column="3"
+                        Content="💾 Сохранить"
+                        Classes="primary"
+                        Command="{Binding SaveCommand}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

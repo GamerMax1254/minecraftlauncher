@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using MinecraftLauncher.Core.Models;
+using System.Text.Json;
 
 namespace MinecraftLauncher.Core.Config;
 
@@ -6,12 +7,16 @@ public class AppSettings
 {
     public string GameDirectory { get; set; } = GetDefaultGameDir();
     public string? JavaPath { get; set; }
+    public string? SelectedJavaId { get; set; }
+    public List<JavaInstallation> JavaInstallations { get; set; } = new();
     public string LastProfileId { get; set; } = "";
     public bool ShowSnapshots { get; set; } = false;
     public string Language { get; set; } = "ru";
     public int DefaultMinRam { get; set; } = 1024;
     public int DefaultMaxRam { get; set; } = 4096;
     public bool CloseLauncherOnGameStart { get; set; } = false;
+    public bool ShowLogsPage { get; set; } = false;
+    public string LastUsername { get; set; } = "";
 
     public static string GetDefaultGameDir()
     {
