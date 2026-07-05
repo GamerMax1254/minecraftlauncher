@@ -95,11 +95,17 @@ public partial class SettingsViewModel : ObservableObject
         CloseLauncherOnGameStart = false;
         StatusText = "↺ Сброшено (нажмите «Сохранить»)";
     }
-
     partial void OnGameDirectoryChanged(string value)
     {
         try
         {
+            value = value.TrimEnd('\\', '/');
+            if (value != GameDirectory)
+            {
+                GameDirectory = value;
+                return;
+            }
+
             if (!string.IsNullOrWhiteSpace(value) && !Directory.Exists(value))
                 Directory.CreateDirectory(value);
         }
