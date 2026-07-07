@@ -1,11 +1,12 @@
-﻿namespace MinecraftLauncher.Core.Models;
+﻿// src/MinecraftLauncher.Core/Models/GameProfile.cs
+namespace MinecraftLauncher.Core.Models;
 
 public enum ModLoader
 {
     Vanilla,
     Fabric,
-    Forge,
     Quilt,
+    Forge,
     NeoForge
 }
 
@@ -24,10 +25,6 @@ public class GameProfile
     public int? OverrideMaxRam { get; set; }
     public string? OverrideJavaId { get; set; }
 
-    /// <summary>
-    /// Использовать изолированную папку для этого профиля
-    /// (по умолчанию: true для модовых, false для ванилы)
-    /// </summary>
     public bool IsolatedGameDir { get; set; }
 
     public string DisplayLoader => Loader switch
@@ -37,6 +34,16 @@ public class GameProfile
         ModLoader.Forge => $"Forge {LoaderVersion}",
         ModLoader.Quilt => $"Quilt {LoaderVersion}",
         ModLoader.NeoForge => $"NeoForge {LoaderVersion}",
+        _ => "Unknown"
+    };
+
+    public string LoaderShortName => Loader switch
+    {
+        ModLoader.Vanilla => "Vanilla",
+        ModLoader.Fabric => "Fabric",
+        ModLoader.Forge => "Forge",
+        ModLoader.Quilt => "Quilt",
+        ModLoader.NeoForge => "NeoForge",
         _ => "Unknown"
     };
 
@@ -51,14 +58,27 @@ public class GameProfile
     };
 
     /// <summary>
-    /// Возвращает путь к папке игры для этого профиля
+    /// Возвращает ID итоговой версии в папке versions/
+    /// Например: "fabric-loader-0.15.11-1.21.4"
     /// </summary>
+    public string GetVersionFolderName()
+    {
+        return Loader switch
+        {
+            ModLoader.Vanilla => MinecraftVersion,
+            ModLoader.Fabric => $"fabric-loader-{LoaderVersion}-{MinecraftVersion}",
+            ModLoader.Quilt => $"quilt-loader-{LoaderVersion}-{MinecraftVersion}",
+            ModLoader.Forge => $"{MinecraftVersion}-forge-{LoaderVersion}",
+            ModLoader.NeoForge => $"neoforge-{LoaderVersion}",
+            _ => MinecraftVersion
+        };
+    }
+
     public string GetGameDirectory(string baseGameDir)
     {
         if (!IsolatedGameDir)
             return baseGameDir;
 
-        // Санитизируем имя для использования в пути
         var safeName = string.Join("_", Name.Split(Path.GetInvalidFileNameChars()));
         return Path.Combine(baseGameDir, "profiles", safeName);
     }

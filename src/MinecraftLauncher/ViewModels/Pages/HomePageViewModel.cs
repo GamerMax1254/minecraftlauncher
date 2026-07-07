@@ -1,16 +1,17 @@
-﻿using System;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using MinecraftLauncher.Core.Config;
+using MinecraftLauncher.Core.Download;
+using MinecraftLauncher.Core.Download.Modded;
+using MinecraftLauncher.Core.Launcher;
+using MinecraftLauncher.Core.Logging;
+using MinecraftLauncher.Core.Models;
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using MinecraftLauncher.Core.Config;
-using MinecraftLauncher.Core.Download;
-using MinecraftLauncher.Core.Launcher;
-using MinecraftLauncher.Core.Logging;
-using MinecraftLauncher.Core.Models;
 
 namespace MinecraftLauncher.ViewModels.Pages;
 
@@ -106,7 +107,7 @@ public partial class HomePageViewModel : PageViewModelBase
     {
         if (SelectedProfile is null)
         {
-            StatusText = "Создайте профиль во вкладке «Версии»!";
+            StatusText = "Создайте профиль во вкладке «Профили»!";
             return;
         }
         if (string.IsNullOrWhiteSpace(Username))
@@ -121,7 +122,7 @@ public partial class HomePageViewModel : PageViewModelBase
 
         try
         {
-            // Java (с учётом override профиля)
+            // Java
             var javaId = SelectedProfile.OverrideJavaId ?? _settings.Settings.SelectedJavaId;
             string? javaPath = null;
             if (!string.IsNullOrEmpty(javaId))
@@ -135,17 +136,6 @@ public partial class HomePageViewModel : PageViewModelBase
             if (string.IsNullOrEmpty(javaPath))
                 throw new Exception("Java не найдена. Добавьте её в Настройках.");
 
-            // TODO: для Fabric/Forge — установка loader'а поверх ванилы
-            // Сейчас работает только Vanilla
-
-            var version = new MinecraftVersion
-            {
-                Id = SelectedProfile.MinecraftVersion,
-                Type = "release",
-                Url = "" // не используется, если версия уже установлена
-            };
-
-            // Установка (если ещё не скачано)
             var progress = new Progress<(string Stage, int Done, int Total)>(p =>
             {
                 StatusText = p.Stage;
@@ -153,36 +143,76 @@ public partial class HomePageViewModel : PageViewModelBase
                 ProgressDetail = p.Total > 0 ? $"{p.Done} / {p.Total} файлов" : "";
             });
 
-            // Получаем URL версии из манифеста (если это первый запуск)
-            var versionsDir = Path.Combine(_settings.Settings.GameDirectory, "versions", SelectedProfile.MinecraftVersion);
-            if (!Directory.Exists(versionsDir))
+            // 1. Устанавливаем ванильную версию (всегда нужна)
+            var vanillaDir = Path.Combine(_settings.Settings.GameDirectory,
+                "versions", SelectedProfile.MinecraftVersion);
+            if (!Directory.Exists(vanillaDir))
             {
                 var vm = new VersionManager(_http, _settings.Settings.GameDirectory);
                 var allVersions = await vm.GetAvailableVersionsAsync(includeSnapshots: true);
-                var real = allVersions.FirstOrDefault(v => v.Id == SelectedProfile.MinecraftVersion);
-                if (real != null) version = real;
+                var vanilla = allVersions.FirstOrDefault(v => v.Id == SelectedProfile.MinecraftVersion);
+                if (vanilla == null)
+                    throw new Exception($"Версия {SelectedProfile.MinecraftVersion} не найдена");
+
+                await _versionInstaller.InstallAsync(vanilla, progress);
+            }
+            else
+            {
+                // Всё равно проверим ассеты/либы (может не хватать чего-то)
+                var vm = new VersionManager(_http, _settings.Settings.GameDirectory);
+                var allVersions = await vm.GetAvailableVersionsAsync(includeSnapshots: true);
+                var vanilla = allVersions.FirstOrDefault(v => v.Id == SelectedProfile.MinecraftVersion);
+                if (vanilla != null)
+                    await _versionInstaller.InstallAsync(vanilla, progress);
             }
 
-            await _versionInstaller.InstallAsync(version, progress);
+            // 2. Устанавливаем модовый загрузчик если нужно
+            if (SelectedProfile.Loader != ModLoader.Vanilla)
+            {
+                StatusText = $"Установка {SelectedProfile.Loader}...";
+
+                switch (SelectedProfile.Loader)
+                {
+                    case ModLoader.Fabric:
+                        var fabric = new FabricInstaller(_http, _settings.Settings.GameDirectory);
+                        await fabric.InstallAsync(
+                            SelectedProfile.MinecraftVersion,
+                            SelectedProfile.LoaderVersion!,
+                            progress);
+                        break;
+
+                    case ModLoader.Quilt:
+                        var quilt = new QuiltInstaller(_http, _settings.Settings.GameDirectory);
+                        await quilt.InstallAsync(
+                            SelectedProfile.MinecraftVersion,
+                            SelectedProfile.LoaderVersion!,
+                            progress);
+                        break;
+
+                    // Forge/NeoForge — в следующем сообщении
+                    default:
+                        throw new Exception($"{SelectedProfile.Loader} пока не реализован");
+                }
+            }
 
             StatusText = "Запуск игры...";
             ProgressValue = 100;
-            // Получаем game dir для профиля (с учётом изоляции)
+
+            // Папка профиля
             var profileGameDir = SelectedProfile.GetGameDirectory(_settings.Settings.GameDirectory);
             Directory.CreateDirectory(profileGameDir);
 
-            // Создаём launcher с раздельными путями
             _gameLauncher = new GameLauncher(
-                _settings.Settings.GameDirectory,  // base — там versions/libraries/assets
-                profileGameDir                      // profile — там saves/mods/config
-            );
+                _settings.Settings.GameDirectory,
+                profileGameDir);
             SubscribeLauncher();
 
+            // Используем имя папки версии (для Fabric = fabric-loader-x-1.21.4)
             var launchSettings = new LaunchSettings
             {
-                GameDir = profileGameDir,   // тоже указываем сюда для совместимости
+                GameDir = profileGameDir,
                 JavaPath = javaPath,
-                VersionId = SelectedProfile.MinecraftVersion,
+                VersionId = SelectedProfile.GetVersionFolderName(),   // ← важно!
                 Username = Username,
                 Uuid = Guid.NewGuid().ToString("N"),
                 AccessToken = "0",
@@ -194,7 +224,6 @@ public partial class HomePageViewModel : PageViewModelBase
 
             await _gameLauncher.LaunchAsync(launchSettings);
 
-            // Статистика профиля
             SelectedProfile.LastPlayedAt = DateTime.UtcNow;
             SelectedProfile.PlayCount++;
             _profiles.Update(SelectedProfile);

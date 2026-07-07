@@ -29,10 +29,8 @@ public class GameLauncher
     public async Task<Process> LaunchAsync(LaunchSettings settings)
     {
         Logger.Info($"Launching Minecraft {settings.VersionId}");
-        Logger.Info($"Java: {settings.JavaPath}");
         Logger.Info($"Base dir: {_baseGameDir}");
         Logger.Info($"Profile dir: {_profileGameDir}");
-        Logger.Info($"RAM: {settings.MinRam}-{settings.MaxRam} MB");
 
         var versionDir = Path.Combine(_baseGameDir, "versions", settings.VersionId);
         var versionJson = Path.Combine(versionDir, $"{settings.VersionId}.json");
@@ -41,23 +39,21 @@ public class GameLauncher
         if (!File.Exists(versionJson))
             throw new FileNotFoundException($"Version JSON not found: {versionJson}");
 
-        // Убеждаемся что папка профиля существует
         Directory.CreateDirectory(_profileGameDir);
 
-        var json = await File.ReadAllTextAsync(versionJson);
-        using var versionData = JsonDocument.Parse(json);
-        var root = versionData.RootElement;
+        // Собираем цепочку наследования (Fabric → Vanilla → ...)
+        var mergedRoot = await LoadWithInheritanceAsync(versionJson);
 
-        var mainClass = root.GetProperty("mainClass").GetString()
+        var mainClass = mergedRoot.GetProperty("mainClass").GetString()
             ?? throw new Exception("mainClass not found");
 
-        var classpath = BuildClasspath(root, versionJar);
+        var classpath = BuildClasspathFromMerged(mergedRoot, versionJar);
         var nativesDir = Path.Combine(versionDir, "natives");
         Directory.CreateDirectory(nativesDir);
 
-        var replacements = BuildReplacements(settings, root, classpath, nativesDir);
-        var jvmArgs = BuildJvmArguments(root, settings, replacements);
-        var gameArgs = BuildGameArguments(root, settings, replacements);
+        var replacements = BuildReplacements(settings, mergedRoot, classpath, nativesDir);
+        var jvmArgs = BuildJvmArguments(mergedRoot, settings, replacements);
+        var gameArgs = BuildGameArguments(mergedRoot, settings, replacements);
 
         var fullArgs = new StringBuilder();
         fullArgs.Append(string.Join(" ", jvmArgs));
@@ -68,13 +64,11 @@ public class GameLauncher
         Logger.Info($"Command: {settings.JavaPath} {finalArgs}");
 
         var gameLogPath = Logger.CreateGameLogFile(settings.VersionId);
-        Logger.Info($"Game log: {gameLogPath}");
-
         var psi = new ProcessStartInfo
         {
             FileName = settings.JavaPath,
             Arguments = finalArgs,
-            WorkingDirectory = _profileGameDir,   // рабочая папка = папка профиля
+            WorkingDirectory = _profileGameDir,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -90,7 +84,6 @@ public class GameLauncher
             OnLog?.Invoke(e.Data);
             try { logWriter.WriteLine(e.Data); } catch { }
         };
-
         process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data == null) return;
@@ -98,7 +91,6 @@ public class GameLauncher
             OnLog?.Invoke(line);
             try { logWriter.WriteLine(line); } catch { }
         };
-
         process.Exited += (_, _) =>
         {
             Logger.Info($"Game exited with code {process.ExitCode}");
@@ -113,6 +105,188 @@ public class GameLauncher
 
         Logger.Info($"Game process started (PID: {process.Id})");
         return process;
+    }
+
+    /// <summary>
+    /// Загружает version.json с поддержкой inheritsFrom (Fabric/Quilt/Forge)
+    /// </summary>
+    private async Task<JsonElement> LoadWithInheritanceAsync(string jsonPath)
+    {
+        var json = await File.ReadAllTextAsync(jsonPath);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement.Clone();
+
+        if (!root.TryGetProperty("inheritsFrom", out var parentIdElem))
+            return root;
+
+        var parentId = parentIdElem.GetString();
+        if (string.IsNullOrEmpty(parentId)) return root;
+
+        Logger.Info($"Version inherits from: {parentId}");
+
+        var parentJsonPath = Path.Combine(_baseGameDir, "versions", parentId, $"{parentId}.json");
+        if (!File.Exists(parentJsonPath))
+            throw new FileNotFoundException($"Parent version not found: {parentJsonPath}");
+
+        var parentRoot = await LoadWithInheritanceAsync(parentJsonPath);
+        return MergeVersions(parentRoot, root);
+    }
+
+    private JsonElement MergeVersions(JsonElement parent, JsonElement child)
+    {
+        // Строим merged JSON через словарь
+        var merged = new Dictionary<string, JsonElement>();
+
+        foreach (var prop in parent.EnumerateObject())
+            merged[prop.Name] = prop.Value;
+
+        foreach (var prop in child.EnumerateObject())
+        {
+            if (prop.Name == "libraries" && merged.ContainsKey("libraries"))
+            {
+                // Объединяем библиотеки: сначала child (loader), потом parent (vanilla)
+                merged["libraries"] = MergeJsonArrays(prop.Value, merged["libraries"]);
+            }
+            else if (prop.Name == "arguments" && merged.ContainsKey("arguments"))
+            {
+                merged["arguments"] = MergeArguments(merged["arguments"], prop.Value);
+            }
+            else
+            {
+                merged[prop.Name] = prop.Value;
+            }
+        }
+
+        // Сериализуем обратно в JsonElement
+        var ms = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(ms))
+        {
+            writer.WriteStartObject();
+            foreach (var (key, value) in merged)
+            {
+                writer.WritePropertyName(key);
+                value.WriteTo(writer);
+            }
+            writer.WriteEndObject();
+        }
+        ms.Position = 0;
+        var mergedDoc = JsonDocument.Parse(ms);
+        return mergedDoc.RootElement.Clone();
+    }
+
+    private JsonElement MergeJsonArrays(JsonElement first, JsonElement second)
+    {
+        var ms = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(ms))
+        {
+            writer.WriteStartArray();
+            foreach (var item in first.EnumerateArray()) item.WriteTo(writer);
+            foreach (var item in second.EnumerateArray()) item.WriteTo(writer);
+            writer.WriteEndArray();
+        }
+        ms.Position = 0;
+        return JsonDocument.Parse(ms).RootElement.Clone();
+    }
+
+    private JsonElement MergeArguments(JsonElement parent, JsonElement child)
+    {
+        var merged = new Dictionary<string, JsonElement>();
+
+        if (parent.TryGetProperty("game", out var pg))
+            merged["game"] = pg;
+        if (parent.TryGetProperty("jvm", out var pj))
+            merged["jvm"] = pj;
+
+        if (child.TryGetProperty("game", out var cg))
+        {
+            merged["game"] = merged.ContainsKey("game")
+                ? MergeJsonArrays(merged["game"], cg)
+                : cg;
+        }
+        if (child.TryGetProperty("jvm", out var cj))
+        {
+            merged["jvm"] = merged.ContainsKey("jvm")
+                ? MergeJsonArrays(merged["jvm"], cj)
+                : cj;
+        }
+
+        var ms = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(ms))
+        {
+            writer.WriteStartObject();
+            foreach (var (key, value) in merged)
+            {
+                writer.WritePropertyName(key);
+                value.WriteTo(writer);
+            }
+            writer.WriteEndObject();
+        }
+        ms.Position = 0;
+        return JsonDocument.Parse(ms).RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Строим classpath из объединённого JSON (без ShouldIncludeLibrary — Fabric libs идут без rules)
+    /// </summary>
+    private string BuildClasspathFromMerged(JsonElement root, string versionJar)
+    {
+        var libraries = new List<string>();
+        var libsDir = Path.Combine(_baseGameDir, "libraries");
+        var separator = OperatingSystem.IsWindows() ? ";" : ":";
+        var addedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (root.TryGetProperty("libraries", out var libs))
+        {
+            foreach (var lib in libs.EnumerateArray())
+            {
+                if (!ShouldIncludeLibrary(lib)) continue;
+
+                string? libPath = null;
+
+                // Стиль Mojang: downloads.artifact.path
+                if (lib.TryGetProperty("downloads", out var downloads) &&
+                    downloads.TryGetProperty("artifact", out var artifact) &&
+                    artifact.TryGetProperty("path", out var pathElem))
+                {
+                    libPath = Path.Combine(libsDir,
+                        pathElem.GetString()!.Replace('/', Path.DirectorySeparatorChar));
+                }
+                // Стиль Fabric: только name
+                else if (lib.TryGetProperty("name", out var nameElem))
+                {
+                    var name = nameElem.GetString();
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        var parts = name.Split(':');
+                        if (parts.Length >= 3)
+                        {
+                            var group = parts[0].Replace('.', '/');
+                            var art = parts[1];
+                            var ver = parts[2];
+                            var rel = $"{group}/{art}/{ver}/{art}-{ver}.jar";
+                            libPath = Path.Combine(libsDir,
+                                rel.Replace('/', Path.DirectorySeparatorChar));
+                        }
+                    }
+                }
+
+                if (libPath != null)
+                {
+                    if (File.Exists(libPath))
+                    {
+                        if (addedPaths.Add(libPath))
+                            libraries.Add(libPath);
+                    }
+                    else
+                    {
+                        Logger.Warn($"Library missing at: {libPath}");
+                    }
+                }
+            }
+        }
+
+        libraries.Add(versionJar);
+        return string.Join(separator, libraries);
     }
 
     private Dictionary<string, string> BuildReplacements(

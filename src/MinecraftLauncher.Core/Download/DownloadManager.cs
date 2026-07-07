@@ -1,4 +1,6 @@
-﻿namespace MinecraftLauncher.Core.Download;
+﻿using MinecraftLauncher.Core.Logging;
+
+namespace MinecraftLauncher.Core.Download;
 
 public class DownloadProgress
 {
@@ -55,15 +57,13 @@ public class DownloadManager
         }
     }
 
-    public async Task DownloadMultipleAsync(
-        IEnumerable<(string Url, string Path)> files,
-        IProgress<(int Done, int Total, string File)>? progress = null,
-        int maxParallel = 4,
-        CancellationToken ct = default)
+    public async Task DownloadMultipleAsync(IEnumerable<(string Url, string Path)> files, IProgress<(int Done, int Total, string File)>? progress = null,
+    int maxParallel = 4, CancellationToken ct = default)
     {
         var fileList = files.ToList();
         int done = 0;
         int total = fileList.Count;
+        var errors = new List<string>();
 
         using var semaphore = new SemaphoreSlim(maxParallel);
 
@@ -74,7 +74,17 @@ public class DownloadManager
             {
                 if (!File.Exists(file.Path))
                 {
-                    await DownloadFileAsync(file.Url, file.Path, ct: ct);
+                    try
+                    {
+                        await DownloadFileAsync(file.Url, file.Path, ct: ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        lock (errors)
+                            errors.Add($"{Path.GetFileName(file.Path)}: {ex.Message}");
+                        // логгируем но не бросаем — попробуем скачать остальные
+                        Logger.Warn($"Failed to download {file.Url}: {ex.Message}");
+                    }
                 }
                 var current = Interlocked.Increment(ref done);
                 progress?.Report((current, total, Path.GetFileName(file.Path)));

@@ -1,4 +1,5 @@
-﻿using System;
+﻿// src/MinecraftLauncher/ViewModels/Pages/CreateProfileDialogViewModel.cs
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -8,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MinecraftLauncher.Core.Config;
 using MinecraftLauncher.Core.Download;
+using MinecraftLauncher.Core.Download.Modded;
 using MinecraftLauncher.Core.Models;
 
 namespace MinecraftLauncher.ViewModels.Pages;
@@ -22,9 +24,9 @@ public partial class CreateProfileDialogViewModel : ViewModelBase
     [ObservableProperty] private string? _selectedVersion;
     [ObservableProperty] private string? _selectedLoaderVersion;
     [ObservableProperty] private bool _includeSnapshots;
+    [ObservableProperty] private bool _isolatedGameDir = true;
     [ObservableProperty] private string _errorText = "";
     [ObservableProperty] private bool _isLoading;
-    [ObservableProperty] private bool _isolatedGameDir = true;
 
     public ObservableCollection<string> AvailableVersions { get; } = new();
     public ObservableCollection<string> AvailableLoaderVersions { get; } = new();
@@ -32,14 +34,19 @@ public partial class CreateProfileDialogViewModel : ViewModelBase
     {
         ModLoader.Vanilla,
         ModLoader.Fabric,
-        ModLoader.Forge,
         ModLoader.Quilt,
+        ModLoader.Forge,
         ModLoader.NeoForge
     };
 
-    private List<MinecraftVersion> _allVersions = new();
+    private List<MinecraftVersion> _allVanillaVersions = new();
+    private List<FabricLoaderVersion> _fabricLoaderVersions = new();
+    private List<FabricGameVersion> _fabricGameVersions = new();
+    private List<FabricLoaderVersion> _quiltLoaderVersions = new();
+    private List<FabricGameVersion> _quiltGameVersions = new();
 
     public bool IsLoaderVersionVisible => SelectedLoader != ModLoader.Vanilla;
+    public bool IsLoaderSupported => SelectedLoader != ModLoader.Forge && SelectedLoader != ModLoader.NeoForge;
 
     public event Action<GameProfile?>? CloseRequested;
 
@@ -54,9 +61,22 @@ public partial class CreateProfileDialogViewModel : ViewModelBase
         IsLoading = true;
         try
         {
+            // Ванильные версии
             var vm = new VersionManager(_http, "");
-            _allVersions = await vm.GetAvailableVersionsAsync(includeSnapshots: true);
+            _allVanillaVersions = await vm.GetAvailableVersionsAsync(includeSnapshots: true);
+
+            // Fabric
+            var fabric = new FabricInstaller(_http, "");
+            _fabricLoaderVersions = await fabric.GetLoaderVersionsAsync();
+            _fabricGameVersions = await fabric.GetSupportedGameVersionsAsync();
+
+            // Quilt
+            var quilt = new QuiltInstaller(_http, "");
+            _quiltLoaderVersions = await quilt.GetLoaderVersionsAsync();
+            _quiltGameVersions = await quilt.GetSupportedGameVersionsAsync();
+
             RefreshVersionList();
+            RefreshLoaderVersions();
         }
         catch (Exception ex)
         {
@@ -70,14 +90,14 @@ public partial class CreateProfileDialogViewModel : ViewModelBase
     partial void OnSelectedLoaderChanged(ModLoader value)
     {
         OnPropertyChanged(nameof(IsLoaderVersionVisible));
-        // По умолчанию: изоляция включена для модовых, выключена для ванилы
+        OnPropertyChanged(nameof(IsLoaderSupported));
         IsolatedGameDir = value != ModLoader.Vanilla;
+        RefreshVersionList();
         RefreshLoaderVersions();
     }
 
     partial void OnSelectedVersionChanged(string? value)
     {
-        // Автоподстановка имени
         if (string.IsNullOrWhiteSpace(ProfileName) && !string.IsNullOrEmpty(value))
         {
             ProfileName = SelectedLoader == ModLoader.Vanilla
@@ -90,20 +110,44 @@ public partial class CreateProfileDialogViewModel : ViewModelBase
     private void RefreshVersionList()
     {
         AvailableVersions.Clear();
-        var filtered = _allVersions
-            .Where(v => IncludeSnapshots || v.Type == "release")
-            .Select(v => v.Id);
+
+        IEnumerable<string> filtered = SelectedLoader switch
+        {
+            ModLoader.Fabric => _fabricGameVersions
+                .Where(v => IncludeSnapshots || v.Stable)
+                .Select(v => v.Version),
+
+            ModLoader.Quilt => _quiltGameVersions
+                .Where(v => IncludeSnapshots || v.Stable)
+                .Select(v => v.Version),
+
+            _ => _allVanillaVersions
+                .Where(v => IncludeSnapshots || v.Type == "release")
+                .Select(v => v.Id)
+        };
+
         foreach (var v in filtered) AvailableVersions.Add(v);
     }
 
     private void RefreshLoaderVersions()
     {
         AvailableLoaderVersions.Clear();
-        if (SelectedLoader == ModLoader.Vanilla) return;
 
-        // Пока заглушка. Позже здесь будет реальный запрос к Fabric/Forge Meta API.
-        AvailableLoaderVersions.Add("(скоро — сейчас не поддерживается)");
-        SelectedLoaderVersion = AvailableLoaderVersions[0];
+        IEnumerable<string> versions = SelectedLoader switch
+        {
+            ModLoader.Fabric => _fabricLoaderVersions
+                .Where(v => IncludeSnapshots || v.Stable)
+                .Select(v => v.Version),
+
+            ModLoader.Quilt => _quiltLoaderVersions
+                .Where(v => IncludeSnapshots || v.Stable)
+                .Select(v => v.Version),
+
+            _ => Enumerable.Empty<string>()
+        };
+
+        foreach (var v in versions) AvailableLoaderVersions.Add(v);
+        SelectedLoaderVersion = AvailableLoaderVersions.FirstOrDefault();
     }
 
     [RelayCommand]
@@ -126,11 +170,15 @@ public partial class CreateProfileDialogViewModel : ViewModelBase
             ErrorText = $"Профиль с именем «{ProfileName}» уже существует";
             return;
         }
-
-        // Пока разрешаем только Vanilla
-        if (SelectedLoader != ModLoader.Vanilla)
+        if (!IsLoaderSupported)
         {
-            ErrorText = $"{SelectedLoader} пока не поддерживается. Скоро добавим!";
+            ErrorText = $"{SelectedLoader} пока в разработке. Скоро!";
+            return;
+        }
+        if (SelectedLoader != ModLoader.Vanilla &&
+            string.IsNullOrWhiteSpace(SelectedLoaderVersion))
+        {
+            ErrorText = "Выберите версию загрузчика";
             return;
         }
 
@@ -147,8 +195,5 @@ public partial class CreateProfileDialogViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancel()
-    {
-        CloseRequested?.Invoke(null);
-    }
+    private void Cancel() => CloseRequested?.Invoke(null);
 }
