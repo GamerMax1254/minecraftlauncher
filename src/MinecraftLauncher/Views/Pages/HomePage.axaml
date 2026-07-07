@@ -7,34 +7,45 @@
 
     <Grid RowDefinitions="Auto, *, Auto">
 
-        <!-- ============ ЗАГОЛОВОК ============ -->
-        <Border Grid.Row="0"
-                Padding="40,30,40,20"
-                Background="{StaticResource BgBaseBrush}">
+        <Border Grid.Row="0" Padding="40,30,40,20">
             <Grid ColumnDefinitions="*, Auto">
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="Добро пожаловать!" Classes="h1"/>
-                    <TextBlock Text="Выбери версию и жми играть" 
-                               Classes="body"
-                               Margin="0,4,0,0"/>
+                    <TextBlock Text="Выбери профиль и жми играть" 
+                               Classes="body" Margin="0,4,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="ПОСЛЕДНЯЯ ИГРА" Classes="label" HorizontalAlignment="Right"/>
                     <TextBlock Text="{Binding LastPlayedText}"
                                FontSize="13"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               HorizontalAlignment="Right"
-                               Margin="0,2,0,0"/>
+                               HorizontalAlignment="Right" Margin="0,2,0,0"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- ============ ОСНОВНОЙ БЛОК ============ -->
         <ScrollViewer Grid.Row="1" Padding="40,10">
-            <StackPanel Spacing="20" MaxWidth="900" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="20" MaxWidth="900">
 
-                <!-- Быстрый запуск -->
-                <Border Classes="card">
+                <!-- Если нет профилей -->
+                <Border Classes="card" 
+                        IsVisible="{Binding !HasProfiles}">
+                    <StackPanel Spacing="14" HorizontalAlignment="Center" Margin="0,20">
+                        <TextBlock Text="📦" FontSize="48" HorizontalAlignment="Center"/>
+                        <TextBlock Text="У вас пока нет профилей"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="Перейдите на вкладку «Версии» чтобы создать первый профиль"
+                                   Classes="body"
+                                   TextAlignment="Center"
+                                   MaxWidth="400"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Основная карточка -->
+                <Border Classes="card" IsVisible="{Binding HasProfiles}">
                     <StackPanel Spacing="20">
                         <Grid ColumnDefinitions="*, 20, *">
                             <StackPanel Grid.Column="0" Spacing="8">
@@ -43,13 +54,32 @@
                                          Watermark="Введите ник..."/>
                             </StackPanel>
                             <StackPanel Grid.Column="2" Spacing="8">
-                                <TextBlock Text="ВЕРСИЯ" Classes="label"/>
-                                <ComboBox ItemsSource="{Binding QuickVersions}"
-                                          SelectedItem="{Binding SelectedVersion}"
+                                <TextBlock Text="ПРОФИЛЬ" Classes="label"/>
+                                <ComboBox ItemsSource="{Binding Profiles}"
+                                          SelectedItem="{Binding SelectedProfile}"
                                           HorizontalAlignment="Stretch">
                                     <ComboBox.ItemTemplate>
-                                        <DataTemplate DataType="models:MinecraftVersion">
-                                            <TextBlock Text="{Binding Id}"/>
+                                        <DataTemplate DataType="models:GameProfile">
+                                            <Grid ColumnDefinitions="Auto, 10, *, Auto">
+                                                <Border Grid.Column="0"
+                                                        Background="{Binding LoaderColor}"
+                                                        CornerRadius="4"
+                                                        Padding="6,2"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayLoader}"
+                                                               Foreground="White"
+                                                               FontSize="10"
+                                                               FontWeight="Bold"/>
+                                                </Border>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding Name}"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="3"
+                                                           Text="{Binding MinecraftVersion}"
+                                                           Foreground="{StaticResource TextTertiaryBrush}"
+                                                           FontSize="11"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
                                         </DataTemplate>
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
@@ -67,15 +97,14 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Прогресс загрузки -->
+                <!-- Прогресс -->
                 <Border Classes="card" 
                         IsVisible="{Binding ShowProgress}">
                     <StackPanel Spacing="12">
                         <Grid ColumnDefinitions="*, Auto">
                             <TextBlock Grid.Column="0"
                                        Text="{Binding StatusText}"
-                                       FontSize="13"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                                       FontSize="13"/>
                             <TextBlock Grid.Column="1"
                                        Text="{Binding ProgressValue, StringFormat={}{0:F0}%}"
                                        FontSize="13"
@@ -90,7 +119,7 @@
                 </Border>
 
                 <!-- Плитки -->
-                <Grid ColumnDefinitions="*, 16, *">
+                <Grid ColumnDefinitions="*, 16, *" IsVisible="{Binding HasProfiles}">
                     <Border Grid.Column="0" Classes="card">
                         <StackPanel Spacing="8">
                             <TextBlock Text="📊" FontSize="24"/>
@@ -114,14 +143,12 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- ============ СТАТУС-БАР ============ -->
         <Border Grid.Row="2"
                 Background="{StaticResource BgSidebarBrush}"
                 BorderBrush="{StaticResource BorderSubtleBrush}"
                 BorderThickness="0,1,0,0"
                 Padding="20,10">
-            <TextBlock Text="{Binding StatusText}"
-                       Classes="caption"/>
+            <TextBlock Text="{Binding StatusText}" Classes="caption"/>
         </Border>
     </Grid>
 </UserControl>

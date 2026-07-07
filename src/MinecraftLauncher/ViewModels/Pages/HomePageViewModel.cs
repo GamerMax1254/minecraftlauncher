@@ -21,7 +21,7 @@ public partial class HomePageViewModel : PageViewModelBase
 
     private readonly HttpClient _http = new();
     private readonly SettingsManager _settings;
-    private VersionManager _versionManager;
+    private readonly ProfileManager _profiles;
     private VersionInstaller _versionInstaller;
     private GameLauncher _gameLauncher;
 
@@ -31,16 +31,17 @@ public partial class HomePageViewModel : PageViewModelBase
     [ObservableProperty] private bool _showProgress;
     [ObservableProperty] private double _progressValue;
     [ObservableProperty] private string _progressDetail = "";
-    [ObservableProperty] private MinecraftVersion? _selectedVersion;
+    [ObservableProperty] private GameProfile? _selectedProfile;
     [ObservableProperty] private string _lastPlayedText = "Никогда";
+    [ObservableProperty] private bool _hasProfiles;
 
-    public ObservableCollection<MinecraftVersion> QuickVersions { get; } = new();
+    public ObservableCollection<GameProfile> Profiles { get; } = new();
 
-    public HomePageViewModel(SettingsManager settings)
+    public HomePageViewModel(SettingsManager settings, ProfileManager profiles)
     {
         _settings = settings;
+        _profiles = profiles;
         var gameDir = _settings.Settings.GameDirectory;
-        _versionManager = new VersionManager(_http, gameDir);
         _versionInstaller = new VersionInstaller(_http, gameDir);
         _gameLauncher = new GameLauncher(gameDir);
         SubscribeLauncher();
@@ -48,29 +49,46 @@ public partial class HomePageViewModel : PageViewModelBase
         Username = string.IsNullOrEmpty(_settings.Settings.LastUsername)
             ? Environment.UserName
             : _settings.Settings.LastUsername;
+
+        RefreshProfiles();
     }
 
     public override void OnNavigatedTo()
     {
         base.OnNavigatedTo();
-        _ = LoadQuickVersionsAsync();
+        RefreshProfiles();
+    }
+
+    public void RefreshProfiles()
+    {
+        var currentId = SelectedProfile?.Id;
+        Profiles.Clear();
+        foreach (var p in _profiles.Profiles.OrderByDescending(p => p.LastPlayedAt ?? p.CreatedAt))
+            Profiles.Add(p);
+
+        HasProfiles = Profiles.Count > 0;
+
+        SelectedProfile = Profiles.FirstOrDefault(p => p.Id == currentId)
+                          ?? Profiles.FirstOrDefault();
+
+        if (SelectedProfile?.LastPlayedAt is DateTime dt)
+            LastPlayedText = FormatRelativeTime(dt);
+        else
+            LastPlayedText = "Никогда";
     }
 
     public void ReloadForGameDir()
     {
         var gameDir = _settings.Settings.GameDirectory;
-        _versionManager = new VersionManager(_http, gameDir);
         _versionInstaller = new VersionInstaller(_http, gameDir);
         _gameLauncher = new GameLauncher(gameDir);
         SubscribeLauncher();
     }
 
-    public void SetVersionAndLaunch(MinecraftVersion version)
+    public void SetProfileAndLaunch(GameProfile profile)
     {
-        // Добавляем в список если её там нет
-        if (!QuickVersions.Any(v => v.Id == version.Id))
-            QuickVersions.Insert(0, version);
-        SelectedVersion = version;
+        RefreshProfiles();
+        SelectedProfile = Profiles.FirstOrDefault(p => p.Id == profile.Id);
     }
 
     private void SubscribeLauncher()
@@ -83,28 +101,12 @@ public partial class HomePageViewModel : PageViewModelBase
         };
     }
 
-    private async Task LoadQuickVersionsAsync()
-    {
-        if (QuickVersions.Count > 0) return; // уже загружено
-        try
-        {
-            var versions = await _versionManager.GetAvailableVersionsAsync(false);
-            foreach (var v in versions.Take(15))
-                QuickVersions.Add(v);
-            SelectedVersion ??= QuickVersions.FirstOrDefault();
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Failed to load quick versions", ex);
-        }
-    }
-
     [RelayCommand]
     private async Task LaunchAsync()
     {
-        if (SelectedVersion is null)
+        if (SelectedProfile is null)
         {
-            StatusText = "Выберите версию!";
+            StatusText = "Создайте профиль во вкладке «Версии»!";
             return;
         }
         if (string.IsNullOrWhiteSpace(Username))
@@ -119,13 +121,13 @@ public partial class HomePageViewModel : PageViewModelBase
 
         try
         {
-            // Java
+            // Java (с учётом override профиля)
+            var javaId = SelectedProfile.OverrideJavaId ?? _settings.Settings.SelectedJavaId;
             string? javaPath = null;
-            var selectedId = _settings.Settings.SelectedJavaId;
-            if (!string.IsNullOrEmpty(selectedId))
+            if (!string.IsNullOrEmpty(javaId))
             {
                 var selected = _settings.Settings.JavaInstallations
-                    .FirstOrDefault(j => j.Id == selectedId);
+                    .FirstOrDefault(j => j.Id == javaId);
                 if (selected != null && File.Exists(selected.Path))
                     javaPath = selected.Path;
             }
@@ -133,7 +135,17 @@ public partial class HomePageViewModel : PageViewModelBase
             if (string.IsNullOrEmpty(javaPath))
                 throw new Exception("Java не найдена. Добавьте её в Настройках.");
 
-            // Установка
+            // TODO: для Fabric/Forge — установка loader'а поверх ванилы
+            // Сейчас работает только Vanilla
+
+            var version = new MinecraftVersion
+            {
+                Id = SelectedProfile.MinecraftVersion,
+                Type = "release",
+                Url = "" // не используется, если версия уже установлена
+            };
+
+            // Установка (если ещё не скачано)
             var progress = new Progress<(string Stage, int Done, int Total)>(p =>
             {
                 StatusText = p.Stage;
@@ -141,29 +153,52 @@ public partial class HomePageViewModel : PageViewModelBase
                 ProgressDetail = p.Total > 0 ? $"{p.Done} / {p.Total} файлов" : "";
             });
 
-            await _versionInstaller.InstallAsync(SelectedVersion, progress);
+            // Получаем URL версии из манифеста (если это первый запуск)
+            var versionsDir = Path.Combine(_settings.Settings.GameDirectory, "versions", SelectedProfile.MinecraftVersion);
+            if (!Directory.Exists(versionsDir))
+            {
+                var vm = new VersionManager(_http, _settings.Settings.GameDirectory);
+                var allVersions = await vm.GetAvailableVersionsAsync(includeSnapshots: true);
+                var real = allVersions.FirstOrDefault(v => v.Id == SelectedProfile.MinecraftVersion);
+                if (real != null) version = real;
+            }
 
-            // Запуск
+            await _versionInstaller.InstallAsync(version, progress);
+
             StatusText = "Запуск игры...";
             ProgressValue = 100;
+            // Получаем game dir для профиля (с учётом изоляции)
+            var profileGameDir = SelectedProfile.GetGameDirectory(_settings.Settings.GameDirectory);
+            Directory.CreateDirectory(profileGameDir);
+
+            // Создаём launcher с раздельными путями
+            _gameLauncher = new GameLauncher(
+                _settings.Settings.GameDirectory,  // base — там versions/libraries/assets
+                profileGameDir                      // profile — там saves/mods/config
+            );
+            SubscribeLauncher();
 
             var launchSettings = new LaunchSettings
             {
-                GameDir = _settings.Settings.GameDirectory,
+                GameDir = profileGameDir,   // тоже указываем сюда для совместимости
                 JavaPath = javaPath,
-                VersionId = SelectedVersion.Id,
+                VersionId = SelectedProfile.MinecraftVersion,
                 Username = Username,
                 Uuid = Guid.NewGuid().ToString("N"),
                 AccessToken = "0",
-                MaxRam = _settings.Settings.DefaultMaxRam,
-                MinRam = _settings.Settings.DefaultMinRam,
+                MaxRam = SelectedProfile.OverrideMaxRam ?? _settings.Settings.DefaultMaxRam,
+                MinRam = SelectedProfile.OverrideMinRam ?? _settings.Settings.DefaultMinRam,
                 Width = 1280,
                 Height = 720
             };
 
             await _gameLauncher.LaunchAsync(launchSettings);
 
-            // Сохраняем ник
+            // Статистика профиля
+            SelectedProfile.LastPlayedAt = DateTime.UtcNow;
+            SelectedProfile.PlayCount++;
+            _profiles.Update(SelectedProfile);
+
             _settings.Settings.LastUsername = Username;
             _settings.Save();
 
@@ -177,5 +212,15 @@ public partial class HomePageViewModel : PageViewModelBase
             IsLaunching = false;
             ShowProgress = false;
         }
+    }
+
+    private static string FormatRelativeTime(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 1) return "Только что";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} мин назад";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} ч назад";
+        if (diff.TotalDays < 30) return $"{(int)diff.TotalDays} дн назад";
+        return dt.ToLocalTime().ToString("dd.MM.yyyy");
     }
 }

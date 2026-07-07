@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MinecraftLauncher.Core.Config;
@@ -12,12 +11,12 @@ namespace MinecraftLauncher.ViewModels;
 public partial class MainViewModel : ViewModelBase
 {
     private readonly SettingsManager _settingsManager;
+    private readonly ProfileManager _profileManager;
 
     [ObservableProperty] private PageViewModelBase? _currentPage;
 
     public ObservableCollection<PageViewModelBase> Pages { get; }
 
-    // Отдельные ссылки для быстрого доступа
     public HomePageViewModel Home { get; }
     public VersionsPageViewModel Versions { get; }
     public SettingsPageViewModel Settings { get; }
@@ -33,15 +32,16 @@ public partial class MainViewModel : ViewModelBase
         _settingsManager = new SettingsManager(appDir);
         _settingsManager.Load();
 
-        // Создаём страницы
-        Home = new HomePageViewModel(_settingsManager);
-        Versions = new VersionsPageViewModel(_settingsManager);
+        _profileManager = new ProfileManager(appDir);
+        _profileManager.Load();
+
+        Home = new HomePageViewModel(_settingsManager, _profileManager);
+        Versions = new VersionsPageViewModel(_settingsManager, _profileManager);
         Settings = new SettingsPageViewModel(_settingsManager);
         Logs = new LogsPageViewModel();
         Customization = new CustomizationPageViewModel();
         About = new AboutPageViewModel();
 
-        // Собираем в коллекцию для сайдбара
         Pages = new ObservableCollection<PageViewModelBase>
         {
             Home,
@@ -49,22 +49,20 @@ public partial class MainViewModel : ViewModelBase
             Settings,
         };
 
-        // Логи показываем только если включено в настройках
         if (_settingsManager.Settings.ShowLogsPage)
             Pages.Add(Logs);
 
         Pages.Add(Customization);
         Pages.Add(About);
 
-        // Реакции
         Settings.SettingsSaved += OnSettingsSaved;
-        Versions.LaunchRequested += version =>
+        Versions.LaunchRequested += profile =>
         {
-            Home.SetVersionAndLaunch(version);
+            Home.SetProfileAndLaunch(profile);
             CurrentPage = Home;
         };
+        Versions.ProfilesChanged += () => Home.RefreshProfiles();
 
-        // Стартовая страница
         CurrentPage = Home;
     }
 
@@ -85,7 +83,6 @@ public partial class MainViewModel : ViewModelBase
         Home.ReloadForGameDir();
         Versions.ReloadForGameDir();
 
-        // Динамически добавляем/убираем страницу логов
         var showLogs = _settingsManager.Settings.ShowLogsPage;
         var hasLogs = Pages.Contains(Logs);
 

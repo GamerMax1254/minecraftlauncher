@@ -34,6 +34,9 @@
     <Compile Update="Views\MainWindow.axaml.cs">
       <DependentUpon>MainWindow.axaml</DependentUpon>
     </Compile>
+    <Compile Update="Views\Pages\CreateProfileDialogView.axaml.cs">
+      <DependentUpon>CreateProfileDialogView.axaml</DependentUpon>
+    </Compile>
     <Compile Update="Views\Pages\HomePage.axaml.cs">
       <DependentUpon>HomePage.axaml</DependentUpon>
     </Compile>
